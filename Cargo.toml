@@ -1,0 +1,30 @@
+[package]
+name = "exercise3-hohot1"
+version = "0.1.0"
+authors = ["Tieu Long Ho"]
+edition = "2021"
+
+[dependencies]
+cortex-m-rtic = "1.1.4"
+display-interface-spi = "0.4.1"
+embedded-graphics = "0.7.1"
+fixed = "1.27.0"
+heapless = "0.8.0"
+nrf52840-hal = "0.17.0"
+panic-halt = "0.2.0"
+st7789 = "0.7.0"
+systick-monotonic = "1.0.1"
+cortex-m = "0.7.7"
+embedded-hal = "1.0.0"
+
+[lints.clippy]
+enum_glob_use = "warn"
+unwrap_used = "warn"
+pedantic = "warn"
+nursery = "warn"
+
+# Cf. https://docs.rust-embedded.org/book/unsorted/speed-vs-size.html
+[profile.release]
+lto = true        # Enable Link Time Optimisation
+codegen-units = 1 # Reduced to increase optimisations.
+debug = true      # Symbols do not require space in flash
