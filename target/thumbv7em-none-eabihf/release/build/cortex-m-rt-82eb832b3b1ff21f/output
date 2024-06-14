@@ -1,6 +1,0 @@
-cargo:rustc-cfg=cortex_m
-cargo:rustc-cfg=armv7m
-cargo:rustc-cfg=has_fpu
-cargo:rustc-link-search=/Users/tieu/git/rust-embedded/rtic-display copy/target/thumbv7em-none-eabihf/release/build/cortex-m-rt-82eb832b3b1ff21f/out
-cargo:rerun-if-changed=build.rs
-cargo:rerun-if-changed=link.x.in

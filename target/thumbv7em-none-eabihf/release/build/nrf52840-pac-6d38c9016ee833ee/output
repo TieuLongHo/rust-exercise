@@ -1,3 +1,0 @@
-cargo:rustc-link-search=/Users/tieu/git/rust-embedded/rtic-display copy/target/thumbv7em-none-eabihf/release/build/nrf52840-pac-6d38c9016ee833ee/out
-cargo:rerun-if-changed=device.x
-cargo:rerun-if-changed=build.rs

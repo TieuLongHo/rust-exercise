@@ -1,24 +1,20 @@
-// Set the application to run without standard library and entry point
 #![no_std]
 #![no_main]
 
-// Import necessary crates and modules
 #[rtic::app(device = nrf52840_hal::pac, dispatchers=[SWI0_EGU0])]
 mod app {
-    // Define constants for display dimensions and timing
     const MAX_TIME: i32 = 50;
     const SCREEN_WIDTH: i32 = 240;
     const SCREEN_HEIGHT: i32 = 240;
     const CENTER: i32 = 120;
 
-    // Import required libraries and traits
     use core::fmt::Write;
     use display_interface_spi::SPIInterface;
     use embedded_graphics::{
         mono_font::{ascii::FONT_9X18, MonoTextStyle},
         pixelcolor::Rgb565,
         prelude::*,
-        primitives::{PrimitiveStyle, Rectangle},
+        primitives::{PrimitiveStyle, Rectangle, PrimitiveStyleBuilder},
         text::Text,
     };
     use heapless::String;
@@ -34,39 +30,31 @@ mod app {
     use st7789::{Orientation, ST7789};
     use systick_monotonic::{ExtU64, Systick};
 
-    // Define the monotonic timer based on SysTick
     #[monotonic(binds = SysTick, default = true)]
     type Mono = Systick<100>; 
-
-    // Define shared state variables
     #[shared]
     struct Shared {
         running: bool,
         time_left: i32,
     }
 
-    // Define local resources
     #[local]
     struct Local {
         display: ST7789<SPIInterface<spim::Spim<SPIM0>, P0_13<Output<PushPull>>, P0_12<Output<PushPull>>>, P1_03<Output<PushPull>>, P1_05<Output<PushPull>>>,
         gpiote: Gpiote,
     }
 
-    // Initialization function to set up hardware and initialize state
     #[init]
-    fn init(ctx: initialize::Context) -> (Shared, Local, init::Monotonics) {
-        // Initialize GPIO ports and pins
+    fn init(ctx: init::Context) -> (Shared, Local, init::Monotonics) {
         let port0 = p0::Parts::new(ctx.device.P0);
         let port1 = p1::Parts::new(ctx.device.P1);
     
-        // Initialize buttons and configure interrupts
         let button_a = port1.p1_02.into_pullup_input().degrade();
         let button_b = port1.p1_10.into_pullup_input().degrade();
         let gpiote = Gpiote::new(ctx.device.GPIOTE);
         gpiote.channel0().input_pin(&button_a).hi_to_lo().enable_interrupt();
         gpiote.channel1().input_pin(&button_b).hi_to_lo().enable_interrupt();
     
-        // Initialize SPI pins for display
         let cs_pin = port0.p0_12.into_push_pull_output(Level::High);
         let dc_pin = port0.p0_13.into_push_pull_output(Level::Low);
         let sck_pin = port0.p0_14.into_push_pull_output(Level::Low).degrade();
@@ -74,7 +62,6 @@ mod app {
         let rst_pin = port1.p1_03.into_push_pull_output(Level::Low);
         let backlight_pin = port1.p1_05.into_push_pull_output(Level::Low);
     
-        // Initialize SPI interface and display
         let spi = spim::Spim::new(
             ctx.device.SPIM0,
             spim::Pins {
@@ -90,28 +77,26 @@ mod app {
         let spi_display = SPIInterface::new(spi, dc_pin, cs_pin);
         let mut display = ST7789::new(spi_display, Some(rst_pin), Some(backlight_pin), 240, 240);
         
-        // Initialize display with appropriate settings
+        // First, create a Delay object to initialize the display
         let mut delay = Delay::new(ctx.core.SYST);
         display.init(&mut delay).unwrap();
         display.set_orientation(Orientation::LandscapeSwapped).unwrap();
         display.clear(Rgb565::BLACK).unwrap();
         
-        // Release SYST timer for monotonic use
+        // Free the SYST from Delay
         let syst = delay.free();
+    
+        // Now, use the freed SYST for the monotonic timer
         let mono = Systick::new(syst, 64_000_000);
     
-        // Enable external high-frequency oscillator
         Clocks::new(ctx.device.CLOCK).enable_ext_hfosc();
     
-        // Return initialized shared state, local resources, and monotonic timer
         (
             Shared { running: false, time_left: MAX_TIME },
             Local { display, gpiote },
             init::Monotonics(mono),
         )
     }
-
-    // Idle task that halts the processor in low-power mode
     #[idle]
     fn idle(_: idle::Context) -> ! {
         loop {
@@ -119,7 +104,6 @@ mod app {
         }
     }
 
-    // Task to update the display based on shared and local data
     #[task(shared = [running, time_left], local = [display])]
     fn update_display(mut ctx: update_display::Context) {
         let running = ctx.shared.running.lock(|r| *r);
@@ -137,28 +121,27 @@ mod app {
 
         let progress_height = (time_left as f32 / MAX_TIME as f32 * SCREEN_HEIGHT as f32) as i32;
 
-        // Draw progress bar
+        
         Rectangle::new(
             Point::new(0, SCREEN_HEIGHT - progress_height),
-            Size::new(SCREEN_WIDTH as u32, progress_height as u32),
+            Size::new(SCREEN_WIDTH  as u32 + 100 as u32, progress_height as u32),
         )
         .into_styled(PrimitiveStyle::with_fill(color))
         .draw(ctx.local.display)
         .unwrap();
 
-        // Prepare and display text based on current state
         let mut text: String<8> = String::new();
         if !running {
             let mut instructions: String<45> = String::new();
             write!(instructions, "<-- Start Timer\nSet Time-->\nTime: {:02}s", time_left).unwrap();
             Text::new(
                 &instructions,
-                Point::new(CENTER + 10, CENTER - 30),
+                Point::new(CENTER + 10, CENTER- 30),
                 MonoTextStyle::new(&FONT_9X18, Rgb565::WHITE),
             )
             .draw(ctx.local.display)
             .unwrap();
-        } else {
+        }else{
             if time_left <= 1 {
                 write!(text, "BEEEP").unwrap();
             } else {
@@ -172,7 +155,6 @@ mod app {
             .draw(ctx.local.display)
             .unwrap();
 
-            // Update timer and schedule next display update
             if time_left <= 0 {
                 ctx.shared.running.lock(|r| *r = false);
             } else {
@@ -181,18 +163,13 @@ mod app {
             }
         }
     }
-
-    // Interrupt handler for button presses
     #[task(binds = GPIOTE, local = [gpiote], shared = [running, time_left])]
     fn handle_buttons(mut ctx: handle_buttons::Context) {
-        // Handle button A press
         if ctx.local.gpiote.channel0().is_event_triggered() {
             ctx.local.gpiote.channel0().reset_events();
             ctx.shared.running.lock(|r| *r = true);
             update_display::spawn().unwrap();
-        }
-        // Handle button B press
-        else if ctx.local.gpiote.channel1().is_event_triggered() {
+        } else if ctx.local.gpiote.channel1().is_event_triggered() {
             ctx.local.gpiote.channel1().reset_events();
             ctx.shared.running.lock(|r| *r = false);
             ctx.shared.time_left.lock(|t| *t = (*t + 5) % (MAX_TIME));
